@@ -12,11 +12,8 @@ Goals:
 - record and reverse engineer LG Resu10H Prime rs485 communications.
 - reverse engineer the Delta inverter outside communication port, I'm not even sure it is active. Tried a number of Delta inverter projects based on the previous generation inverters, but can't get a response.
 
-
-
-
-Setup notes required since Grug's memory is better than mine:
-*  git repo is cloned to `/home/pi/DeltaGrugBus, 
-*  sshfs the /home/pi folder to `/IOT_RPi folder on PC
-*  from cursor on PC, access the folder from `/IOT_RPi/DeltaGrug, open terminal and ssh to pi
+Setup notes since Grug's memory is better than mine:
+*  git repo is cloned to `/home/pi/DeltaGrugBus`, 
+*  sshfs the /home/pi folder to `/IOT_RPi` folder on PC
+*  from cursor on PC, access the folder from `/IOT_RPi/DeltaGrug`, open terminal and ssh to pi
 
