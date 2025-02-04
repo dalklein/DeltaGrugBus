@@ -9,5 +9,7 @@ DeltaGrugBus will use the grugbus library, likely no changes. Due to differences
 
 Goals:  
 -similar to grugbus example pv_controller.py, MITM between the meter and inverter comms, to enable some control of the inverter & battery. Initially only a fixed offset watts to the 'grid' power, later take input from node-red or mqtt.
+
 -record and reverse engineer LG Resu10H Prime rs485 communications.
+
 -reverse engineer the Delta inverter outside communication port, I'm not even sure it is active. Tried a number of Delta inverter projects based on the previous generation inverters, but can't get a response.
