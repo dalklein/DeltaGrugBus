@@ -15,5 +15,8 @@ Goals:
 Setup notes since Grug's memory is better than mine:
 *  git repo is cloned to `/home/pi/DeltaGrugBus`, 
 *  sshfs the /home/pi folder to `/IOT_RPi` folder on PC
-*  from cursor on PC, access the folder from `/IOT_RPi/DeltaGrug`, open terminal and ssh to pi
-
+*  from cursor on PC, access the folder from `/IOT_RPi/DeltaGrugBus`, open terminal and ssh to pi
+*  source ./dgb_venv/bin/activate to enable venv where libraries are installed
+*  pip3 install -r requirements.txt
+*  python3.11 or later req'd for asyncio.Runner function (use python3.12 same as PC)
+*  reminder, maybe don't update system python version, to not break something else, only use 3.12 for the venv to run this project

@@ -1,1 +1,6 @@
+serial
 uvloop
+orjson
+pymodbus
+config
+gmqtt

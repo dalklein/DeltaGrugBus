@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import sys, time, serial, socket, logging, logging.handlers, traceback, shutil, uvloop, asyncio, orjson
-from path import Path
+from pathlib import Path
 from asyncio.exceptions import TimeoutError, CancelledError
 
 # Modbus
