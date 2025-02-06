@@ -80,7 +80,7 @@ class HookModbusSlaveContext(ModbusSlaveContext):
 #   it will respond to that address on the COM port, and it will query the meter with that
 #   address on the meter port.
 #
-class FakeSmartmeter( grugbus.LocalServer ):
+class FakeMeter1( grugbus.LocalServer ):
     #
     #   port    serial port name
     #   key     machine readable name for logging, like "fake_meter_1", 
@@ -102,8 +102,8 @@ class FakeSmartmeter( grugbus.LocalServer ):
         slave_ctx.modbus_address = modbus_address
 
         # only create registers we actually need
-        keys = { "active_power","voltage","current","apparent_power","reactive_power","power_factor",
-                 "frequency","import_active_energy","export_active_energy"}
+        keys = { "total_real_power","watts_phase_a","watts_phase_b","watts_phase_c","reactive_power","real_power_scale_factor"}
+
 
         # Use grugbus for data type translation
         super().__init__( slave_ctx, modbus_address, key, name, [ reg for reg in meter_type.MakeRegisters() if reg.key in keys ])
@@ -179,29 +179,29 @@ class Controller:
         with asyncio.Runner(loop_factory=uvloop.new_event_loop) as runner:
             runner.run(self.astart())
 
-    async def on_emergency_stop( self, param ):
-        for solis in self.inverters:
-            # Fire the event to trigger the powersave coroutine to look at the button state
-            solis.event_all.set()
-            solis.event_all.clear()
+    # async def on_emergency_stop( self, param ):
+    #     for solis in self.inverters:
+    #         # Fire the event to trigger the powersave coroutine to look at the button state
+    #         solis.event_all.set()
+    #         solis.event_all.clear()
 
     async def astart( self ):    
         self.error_tick = Metronome( 10 )
 
-        self.mqtt = MQTTWrapper( "pv_controller" )
+        self.mqtt = MQTTWrapper( "delta_controller" )
         self.mqtt_topic = "pv/"
         await self.mqtt.mqtt.connect( config.MQTT_BROKER_LOCAL )
 
         # Get battery current from BMS
         # MQTTVariable( "pv/bms/current", self, "bms_current", float, None, 0 )
         # MQTTVariable( "pv/bms/power",   self, "bms_power",   float, None, 0 )
-        MQTTVariable( "pv/bms/soc",          self, "bms_soc", float, None, 0 )
-        MQTTVariable( "chauffage/pompe",     self, "chauffage_pac_pompe",   int, None, 0 )
-        MQTTVariable( "pv/mainboard/button", self, "emergency_stop_button", int, None, 0, self.on_emergency_stop )
-        MQTTVariable( "pv/bms/alarm"                 , self, "bms_alarm", int, None, 0 )
-        MQTTVariable( "pv/bms/request_full_charge"   , self, "bms_request_full_charge", int, None, 0 )
-        MQTTVariable( "pv/bms/request_force_charge_1", self, "bms_request_force_charge_1", int, None, 0 )
-        MQTTVariable( "pv/bms/request_force_charge_2", self, "bms_request_force_charge_2", int, None, 0 )
+        # MQTTVariable( "pv/bms/soc",          self, "bms_soc", float, None, 0 )
+        # MQTTVariable( "chauffage/pompe",     self, "chauffage_pac_pompe",   int, None, 0 )
+        # MQTTVariable( "pv/mainboard/button", self, "emergency_stop_button", int, None, 0, self.on_emergency_stop )
+        # MQTTVariable( "pv/bms/alarm"                 , self, "bms_alarm", int, None, 0 )
+        # MQTTVariable( "pv/bms/request_full_charge"   , self, "bms_request_full_charge", int, None, 0 )
+        # MQTTVariable( "pv/bms/request_force_charge_1", self, "bms_request_force_charge_1", int, None, 0 )
+        # MQTTVariable( "pv/bms/request_force_charge_2", self, "bms_request_force_charge_2", int, None, 0 )
 
         #   Main smartmeter
         #
@@ -224,8 +224,8 @@ class Controller:
                     mqtt_topic ="pv/%s/meter/" % key,
                     **cfg["LOCAL_METER"]["PARAMS"],
                 ),
-                fake_meter = FakeSmartmeter( 
-                    meter_type      = Acrel_1_Phase,
+                fake_meter = FakeMeter1( 
+                    meter_type      = Acrel_AGF_AE_D,
                     # meter_type      = Eastron_SDM120, # Acrel_1_Phase,
                     mqtt            = self.mqtt, 
                     mqtt_topic      = ("pv/%s/fakemeter/"%key),
