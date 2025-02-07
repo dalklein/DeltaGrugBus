@@ -296,7 +296,6 @@ class GridMeter( grugbus.SlaveDevice ):
                 await asyncio.sleep(0.5)
             await tick.wait()
 
-
 ########################################################################################
 #
 #       Put it all together
@@ -304,7 +303,11 @@ class GridMeter( grugbus.SlaveDevice ):
 ########################################################################################
 class DeltaManager():
     def __init__( self ):
-        # Initialize other attributes if necessary
+        self.total_real_power = 0
+        self.watts_phase_a            = 0 
+        self.watts_phase_b            = 0   
+        self.watts_phase_c            = 0   
+        self.real_power_scale_factor  = 0   # Acrel AGF-AE-D reg 40022. If 0, coeff=1. If 1, coeff=10.
         self.is_online = False
         log.info("DeltaManager initialized")
 
@@ -360,11 +363,19 @@ class DeltaManager():
                     self.watts_phase_c            ,   
                     self.real_power_scale_factor  ,                     
                     ):
+                    # try: 
+                    if reg.value is not None:  # Now this should work
+                        print(f"{reg.key}: {reg.value}")
+                    # except:
+                    #     print(f"Register value: {reg}")
                     if isinstance( reg, str ):
                         print(reg)
                     else:
-                        if reg.value != None:
-                            print( "%40s %10s %10s" % (reg.key, reg.device.key, reg.format_value() ) )
+                        try:
+                            if reg.value != None:
+                                print( "%40s %10s %10s" % (reg.key, reg.device.key, reg.format_value() ) )
+                        except:
+                            print(reg)
             except (KeyboardInterrupt, asyncio.exceptions.CancelledError):
                 return abort()
             except:

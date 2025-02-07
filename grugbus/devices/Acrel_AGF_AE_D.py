@@ -35,7 +35,7 @@ def MakeRegisters():
     RegU16(          4, 40019, 1, 'watts_phase_a'                      ,    1, 'W'   , 'float', 1, 'Watts phase A'                  , ''),
     RegU16(          4, 40020, 1, 'watts_phase_b'                      ,    1, 'W'   , 'float', 1, 'Watts phase B'                  , ''),
     RegU16(          4, 40021, 1, 'watts_phase_c'                      ,    1, 'W'   , 'float', 1, 'Watts phase C'                  , ''),
-    RegS16(          4, 40022, 1, 'real_power_scale_factor'            , None, None  , 'int'  , 0, 'Real Power Scale Factor'        , ''),
+    RegS16(          4, 40022, 1, 'real_power_scale_factor'            , None, None  , 'float', 0, 'Real Power Scale Factor'        , ''),
     RegU16(          4, 40023, 1, 'va'                                 ,    1, 'VA'  , 'float', 1, 'VA'                             , ''),
     RegU16(          4, 40024, 1, 'va_phase_a'                         ,    1, 'VA'  , 'float', 1, 'VA phase A'                     , ''),
     RegU16(          4, 40025, 1, 'va_phase_b'                         ,    1, 'VA'  , 'float', 1, 'VA phase B'                     , ''),

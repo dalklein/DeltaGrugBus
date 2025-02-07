@@ -1,0 +1,5 @@
+{
+    "python.defaultInterpreterPath": "${workspaceFolder}/dgb_venv/bin/python",
+    "python.analysis.extraPaths": ["${workspaceFolder}/dgb_venv/lib/python3.x/site-packages"],
+    "python.pythonPath": "${workspaceFolder}/dgb_venv/bin/python"
+} 
