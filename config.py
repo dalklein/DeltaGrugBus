@@ -128,9 +128,9 @@ RGM_PORT_FAKE_METER1 = "/dev/ttyACM1"   # Delta fake Acrel AGF-AE-D 'grid' meter
 POLL_PERIOD_METER       = 0.2
 POLL_PERIOD_SOLIS_METER = 0.2
 POLL_PERIOD_SOLIS       = 0.2
-POLL_PERIOD_EVSE        = 1
-POLL_PERIOD_EVSE_METER_CHARGING  = 0.2
-POLL_PERIOD_EVSE_METER_IDLE      = 0.2 # 10
+#POLL_PERIOD_EVSE        = 1
+#POLL_PERIOD_EVSE_METER_CHARGING  = 0.2
+#POLL_PERIOD_EVSE_METER_IDLE      = 0.2 # 10
 
 ##################################################################
 # Modbus configuration
@@ -459,78 +459,6 @@ ROUTER = {
             
     },
 
-    "evse_off": {
-        "evse": {
-            "high_priority_W"       : lambda ctx: 0,    
-            "reserve_for_battery_W" : lambda ctx: 10000,
-            "start_threshold_W"     : lambda ctx: 10000,
-            "stop_threshold_W"      : lambda ctx: 10000,
-        },
-        "router": { "config_description"    : orjson.dumps({"desc":"Conditions de charge VE:\n- \<90%: Priorité Batterie\n- 90-95%: transition\n- \>95% Priorité VE"}), },
-    },
-
-    "evse_low": {
-        "evse": {
-            #
-            #   EVSE/Battery power management:
-            #   First excess power is computed. Then, EVSE takes up to high_priority_W, if available.
-            #   This is to avoid frequent start/stop cycles. This should be > start_threshold_W.
-            "high_priority_W"       : Interp((89, 0), (90, 1500), var="soc"),    
-
-            # Remaining excess goes to battery up to reserve_for_battery_W
-            # Interp(min_soc, max_power, max_soc, min_power) 
-            # Then what remains after that goes to EVSE.
-            "reserve_for_battery_W" : Interp((90, 10000), (95, 500), var="soc"),
-            "start_threshold_W"     : Interp((90, 2000), (100, 1400),var="soc"), # minimum excess power to start charging
-            "stop_threshold_W"      : Interp((90, 1400), (100, 1000),var="soc"), # excess power to stop charging
-        },
-        "router": { "config_description"    : orjson.dumps({"desc":"Conditions de charge VE:\n- \<90%: Priorité Batterie\n- 90-95%: transition\n- \>95% Priorité VE"}), },
-    },
-
-    #   Charge the car and battery at the same time to maximize self consumption
-    #
-    #   Allocate "high_priority_W" watts to EV charging (if available)
-    #   then "reserve_for_battery_W" to battery, then the rest to EV.
-    #   Relaxed start/stop thresholds, allowing to discharge battery a little
-    #   to avoid stopping charge on each cloud.
-    "evse_mid": { 
-        "evse": {
-            "high_priority_W"       : Interp((79, 0),  (80, 2000),var="soc"), 
-            "reserve_for_battery_W" : Interp((80, 6000),  (90, 1000),var="soc"),
-            "start_threshold_W"     : Interp((80, 2000), (100, 1200),var="soc"),
-            "stop_threshold_W"      : Interp((80, 1400), (100,  800),var="soc"),     # allow it to discharge battery a little
-        },
-        "router": { "config_description"    : orjson.dumps({"desc":"Conditions de charge VE:\n- \<80%: Priorité Batterie\n- 80-90%: transition\n- \>90% Priorité VE"}), },
-    },
-
-    #   Charge the car and battery at the same time to maximize self consumption
-    #
-    #   Allocate "high_priority_W" watts to EV charging (if available)
-    #   then "reserve_for_battery_W" to battery, then the rest to EV.
-    #   Relaxed start/stop thresholds, allowing to discharge battery a little
-    #   to avoid stopping charge on each cloud.
-    "evse_high": { 
-        "evse": {
-            "high_priority_W"       : Interp((49, 0),  (50, 2000),var="soc"), 
-            "reserve_for_battery_W" : Interp((50, 6000),  (95, 1000),var="soc"),
-            "start_threshold_W"     : Interp((60, 2000), (100, 1200),var="soc"),
-            "stop_threshold_W"      : Interp((70, 1400), (100,  800),var="soc"),     # allow it to discharge battery a little
-        },
-        "router": { "config_description"    : orjson.dumps({"desc":"Conditions de charge VE:\n- \<50%: Priorité Batterie\n- 50-95%: transition\n- \>95% Priorité VE"}), },
-    },
-
-    #   Maximum PV power for EV, allows a bit of battery discharge.
-    #   For more power to EV, use force charge.
-    #
-    "evse_max": { 
-        "evse": {
-            "high_priority_W"       : Interp((10, 0),  (11, 2000),var="soc"), 
-            "reserve_for_battery_W" : lambda ctx: 0,
-            "start_threshold_W"     : Interp((50, 1400), (100, 1000),var="soc"),
-            "stop_threshold_W"      : Interp((50, 1000), (100,  500),var="soc"),
-        },
-        "router": { "config_description"    : orjson.dumps({"desc":"Conditions de charge VE:\n- \<=10%: Priorité Batterie\n- \>10% Priorité VE"}), },
-    },
 }
 
 ROUTER_DEFAULT_CONFIG = ["evse_mid"]

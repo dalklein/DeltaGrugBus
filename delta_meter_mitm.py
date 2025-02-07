@@ -18,7 +18,7 @@ from pymodbus.exceptions import ModbusException
 # Device wrappers
 import grugbus
 from misc import *
-from grugbus.devices import Eastron_SDM120, Solis_S5_EH1P_6K_2020_Extras, Eastron_SDM630, Acrel_1_Phase
+from grugbus.devices import Acrel_AGF_AE_D
 import config
 
 # pymodbus.pymodbus_apply_logging_config( logging.DEBUG )
@@ -36,6 +36,9 @@ log = logging.getLogger(__name__)
 # Instead, set the reconnect delay directly in the client configuration if applicable
 #client = AsyncModbusTcpClient(..., reconnect_delay=60)  # Example for TCP client
 
+# After logging setup
+log.info("Logging initialized")
+logging.getLogger().handlers[0].flush()
 
 """
 
@@ -119,45 +122,42 @@ class HookModbusSlaveContext(ModbusSlaveContext):
 #   address and raw data.
 #   
 ###########################################################################################
-#   Meter setting on Solis: "Acrel 1 Phase" ; reads fcode 3 addr 0 count 65
-#   Note the Modbus manual for Acrel ACR10H corresponds to the wrong version of the meter.
-#   Register map in Acrel_1_Phase.py was reverse engineered from inverter requests.
-#   This meter is queried every second, which allows Solis to update its output power
-#   twice as fast as with Eastron meter, which is queried every two seconds.
+#   Delta ExTLUS w/ Acrel AGF-AE-D meter & LG battery on RGM rs485 bus
+#        inverter reads meter id2 func 3, addr 40018-40022 for self consumption power control
+#       inverter also requests id3 with different registers for AC solar power data. 
+#    Caution: If the AC coupled option is enabled and 2nd SysProductionMeterIDSet is done, 
+#       the inverter will set the meter to use id3, even though you may only have the one
+#       meter installed at grid location, so that hoses the normal control.
 #
-#   Note: for Solis inverters, the modbus address of the meter and the inverter are the same
-#   although they are on two different buses. So if you set address to 2 in the inverter GUI, 
-#   it will respond to that address on the COM port, and it will query the meter with that
-#   address on the meter port.
+#   GridMeter id2 is queried every second maybe 10Hz, not sure Acrel AGF-AE-D meter is that fast
+
 class FakeMeter1( grugbus.LocalServer ):
     #
     #   port    serial port name
     #   key     machine readable name for logging, like "fake_meter_1", 
     #   name    human readable name like "Fake SDM120 for Inverter 1"
     #
-    def __init__( self, port, key, name, modbus_address=1 ):
+    def __init__( self, port, key, name, modbus_address=2 ):
         self.port = port
 
         # Create slave context for our local server
         slave_ctxs = {}
         # Create datastore corresponding to registers available in meter
-        data_store = ModbusSequentialDataBlock( 0, [0]*350 )   
+        data_store = ModbusSequentialDataBlock( 40000, [0]*121 )   
         slave_ctx = HookModbusSlaveContext(
-            zero_mode = True,   # addresses start at zero
             di = ModbusSequentialDataBlock( 0, [0] ), # Discrete Inputs  (not used, so just one zero register)
             co = ModbusSequentialDataBlock( 0, [0] ), # Coils            (not used, so just one zero register)
             hr = data_store, # Holding Registers, we will write fake values to this datastore
             ir = data_store  # Input Registers (use the same datastore, so we don't have to check the opcode)
-            )
+        )
         slave_ctx._on_getValues = self._on_getValues # hook to update datastore when we get a request
         slave_ctx.modbus_address = modbus_address
         slave_ctxs[modbus_address] = slave_ctx
 
-        # Create Server context and assign previously created datastore to smartmeter_modbus_address, this means our 
-        # local server will respond to requests to this address with the contents of this datastore
+        # Create Server context and assign previously created datastore to smartmeter_modbus_address
         self.server_ctx = ModbusServerContext( slave_ctxs, single=False )
-        super().__init__( slave_ctxs[1],   # dummy parameter, address is not actually used
-              1, key, name, 
+        super().__init__( slave_ctxs[modbus_address],   # Use modbus_address here
+              modbus_address, key, name, 
             Acrel_AGF_AE_D.MakeRegisters() ) # build our registers
         self.last_request_time = time.time()    # for stats
         self.data_request_timestamp = 0
@@ -214,7 +214,7 @@ class FakeMeter1( grugbus.LocalServer ):
     # to setup the server context, so that we serve correct value to the inverter when it makes a request.
     async def start_server( self ):
         self.server = await StartAsyncSerialServer( context=self.server_ctx, 
-            framer          = ModbusRtuFramer,
+            #framer          = ModbusRtuFramer,
             ignore_missing_slaves = True,
             auto_reconnect = True,
             port            = self.port,
@@ -237,6 +237,7 @@ class FakeMeter1( grugbus.LocalServer ):
 ########################################################################################
 class GridMeter( grugbus.SlaveDevice ):
     def __init__( self ):
+        log.info("Initializing GridMeter...")
         super().__init__( 
             AsyncModbusSerialClient(
                 port            = config.RGM_PORT_METER,
@@ -251,37 +252,45 @@ class GridMeter( grugbus.SlaveDevice ):
             "meter", "Acrel_AGFAED", 
             Acrel_AGF_AE_D.MakeRegisters() )
         self.is_online = False
+        log.info("GridMeter initialized")
 
     async def read_coroutine( self ):
+        log.info("Starting GridMeter read coroutine...")
         regs_to_read = (
-            self.voltage                ,
-            self.current                ,
-            self.apparent_power         ,
-            self.reactive_power         ,
-            self.power_factor           ,
-            self.frequency              ,
-            self.import_active_energy   ,
-            self.export_active_energy   ,
-            self.active_power           ,
+            self.total_real_power         ,    
+            self.watts_phase_a            ,  
+            self.watts_phase_b            ,   
+            self.watts_phase_c            ,   
+            self.real_power_scale_factor         
         )
 
         tick = Metronome(config.POLL_PERIOD_METER)
         while STILL_ALIVE:
             try:
                 if not self.modbus.connected:
+                    log.info("Attempting modbus connection...")
                     await self.modbus.connect()
+                    log.info("Modbus connected successfully")
 
                 try:
                     regs = await self.read_regs( regs_to_read )
+                    if not self.is_online:
+                        log.info("GridMeter is now online")
                     self.is_online = True
                 except asyncio.exceptions.TimeoutError:
+                    if self.is_online:
+                        log.warning("GridMeter went offline - timeout")
                     self.is_online = False
-                except:
+                except Exception as e:
+                    if self.is_online:
+                        log.error(f"GridMeter went offline - {str(e)}")
                     self.is_online = False
                     raise
             except (KeyboardInterrupt, asyncio.exceptions.CancelledError):
+                log.info("GridMeter read coroutine received shutdown signal")
                 return abort()
-            except:
+            except Exception as e:
+                log.error(f"Error in GridMeter read loop: {str(e)}")
                 s = traceback.format_exc()
                 log.error(s)
                 await asyncio.sleep(0.5)
@@ -295,33 +304,47 @@ class GridMeter( grugbus.SlaveDevice ):
 ########################################################################################
 class DeltaManager():
     def __init__( self ):
+        # Initialize other attributes if necessary
+        self.is_online = False
+        log.info("DeltaManager initialized")
 
+    async def initialize_meters(self):
+        log.info("Initializing meters...")
         self.meter = GridMeter()
-        self.fake_meter = FakeMeter1( config.RGM_PORT_FAKE_METER1, "fake_meter_1", "Fake Acrel AGF-AE-D meter for Inverter 1" )
+        self.fake_meter = FakeMeter1( config.RGM_PORT_FAKE_METER1, "fake_meter_1", "Fake Acrel AGF-AE-D for Inv1" )
+        log.info("Meters initialized successfully")
 
     ########################################################################################
     #   Start async processes
     ########################################################################################
 
     def start( self ):
+        log.info("Starting DeltaManager...")
         if sys.version_info >= (3, 11):
+            log.info("Using Python 3.11+ runner with uvloop")
             with asyncio.Runner(loop_factory=uvloop.new_event_loop) as runner:
-            # with asyncio.Runner() as runner:
                 runner.run(self.astart())
         else:
+            log.info("Using legacy asyncio.run with uvloop")
             uvloop.install()
             asyncio.run(self.astart())
 
     async def astart( self ):
-        loop = asyncio.get_event_loop()
+        log.info("Setting up async tasks...")
+        loop = asyncio.get_running_loop()
         loop.add_signal_handler(signal.SIGINT,  abort)
         loop.add_signal_handler(signal.SIGTERM, abort)
 
+        await self.initialize_meters()
+
+        log.info("Starting server and monitoring tasks...")
         asyncio.create_task( self.fake_meter.start_server() )
         asyncio.create_task( abort_on_exit( self.meter.read_coroutine() ))
         asyncio.create_task( self.display_coroutine() )
+        log.info("All tasks started, waiting for STOP event")
 
         await STOP.wait()
+        log.info("STOP event received, shutting down...")
 
     ########################################################################################
     #   Local display
@@ -329,37 +352,27 @@ class DeltaManager():
 
     async def display_coroutine( self ):
         while STILL_ALIVE:
-            await asyncio.sleep(1)
-            r = [""]
-
             try:
                 for reg in (
-                    self.meter.voltage             ,
-                    self.meter.current             ,
-                    self.meter.apparent_power      ,
-                    self.meter.reactive_power      ,
-                    self.meter.power_factor        ,
-                    self.meter.frequency           ,
-                    self.meter.import_active_energy,
-                    self.meter.export_active_energy,
-                    self.meter.active_power        ,                    
+                    self.total_real_power         ,    
+                    self.watts_phase_a            ,  
+                    self.watts_phase_b            ,   
+                    self.watts_phase_c            ,   
+                    self.real_power_scale_factor  ,                     
                     ):
                     if isinstance( reg, str ):
-                        r.append(reg)
+                        print(reg)
                     else:
                         if reg.value != None:
-                            r.append( "%40s %10s %10s" % (reg.key, reg.device.key, reg.format_value() ) )
-
-                # print( "\n".join(r) )
+                            print( "%40s %10s %10s" % (reg.key, reg.device.key, reg.format_value() ) )
             except (KeyboardInterrupt, asyncio.exceptions.CancelledError):
                 return abort()
             except:
                 log.error(traceback.format_exc())
 
 
-
-mgr = DeltaManager()
-try:
+if __name__ == "__main__":
+    log.info("Starting main program")
+    mgr = DeltaManager()
     mgr.start()
-finally:
-    logging.shutdown()
+    log.info("Program ended")
