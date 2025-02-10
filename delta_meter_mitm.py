@@ -187,6 +187,7 @@ class FakeMeter1( grugbus.LocalServer ):
             self.watts_phase_a                .value = meter.watts_phase_a              .value
             self.watts_phase_b                .value = meter.watts_phase_b              .value
             self.watts_phase_c                .value = meter.watts_phase_c              .value
+                # Acrel AGF-AE-D reg 40022. If 0, coeff=1. If 1, coeff=10.
             self.real_power_scale_factor         .value = meter.real_power_scale_factor       .value
 
         except TypeError:   # if one of the registers was None because it wasn't read yet
@@ -248,7 +249,7 @@ class GridMeter( grugbus.SlaveDevice ):
                 parity          = "N",
                 stopbits        = 1
             ),
-            1,          # Modbus address
+            2,          # Modbus address
             "meter", "Acrel_AGFAED", 
             Acrel_AGF_AE_D.MakeRegisters() )
         self.is_online = False
@@ -303,11 +304,6 @@ class GridMeter( grugbus.SlaveDevice ):
 ########################################################################################
 class DeltaManager():
     def __init__( self ):
-        self.total_real_power = 0
-        self.watts_phase_a            = 0 
-        self.watts_phase_b            = 0   
-        self.watts_phase_c            = 0   
-        self.real_power_scale_factor  = 0   # Acrel AGF-AE-D reg 40022. If 0, coeff=1. If 1, coeff=10.
         self.is_online = False
         log.info("DeltaManager initialized")
 
@@ -357,11 +353,11 @@ class DeltaManager():
         while STILL_ALIVE:
             try:
                 for reg in (
-                    self.total_real_power         ,    
-                    self.watts_phase_a            ,  
-                    self.watts_phase_b            ,   
-                    self.watts_phase_c            ,   
-                    self.real_power_scale_factor  ,                     
+                    self.meter.total_real_power         ,    
+                    self.meter.watts_phase_a            ,  
+                    self.meter.watts_phase_b            ,   
+                    self.meter.watts_phase_c            ,   
+                    self.meter.real_power_scale_factor  ,                     
                     ):
                     # try: 
                     if reg.value is not None:  # Now this should work
