@@ -1,6 +1,6 @@
 pyserial
 uvloop
 orjson
-pymodbus
+pymodbus==3.6.9
 config
 gmqtt

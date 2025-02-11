@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-import os, pprint, time, sys, serial, socket, traceback, struct, datetime, logging, math, traceback, collections
+import os, pprint, time, sys, socket, traceback, struct, datetime, logging, math, traceback, collections
 
 # Modbus stuff
 import pymodbus, asyncio, signal, uvloop
@@ -138,6 +138,7 @@ class FakeMeter1( grugbus.LocalServer ):
     #   name    human readable name like "Fake SDM120 for Inverter 1"
     #
     def __init__( self, port, key, name, modbus_address=2 ):
+        log.info("FakeMeter1 init port=%s, key=%s, name=%s, id=%d", port, key, name, modbus_address)
         self.port = port
 
         # Create slave context for our local server
@@ -164,9 +165,12 @@ class FakeMeter1( grugbus.LocalServer ):
         self.power_offset = 0
         self.power_elimit = 2000
         self.export_mode = 0
+        log.info("FakeMeter1 initialized")
 
     # This is called when the inverter sends a request to this server
     def _on_getValues( self, fc_as_hex, address, count, ctx ):
+        # Log when a request for data is received
+        log.info("FakeMeter1 received request for data: fc=%s, address=%d, count=%d", fc_as_hex, address, count)
 
         #   The main meter is read in another coroutine, so data is already available and up to date
         #   but we still have to check if the meter is actually working
@@ -183,12 +187,12 @@ class FakeMeter1( grugbus.LocalServer ):
         # Delta inverter requests 40018-40022, real power registers, for control loop, 
         #   Could get other data, but don't have a need, yet.
         try:    # Fill our registers with up-to-date data
-            self.total_real_power                .value = meter.total_real_power              .value
-            self.watts_phase_a                .value = meter.watts_phase_a              .value
-            self.watts_phase_b                .value = meter.watts_phase_b              .value
-            self.watts_phase_c                .value = meter.watts_phase_c              .value
+            self.total_real_power.value = meter.total_real_power.value
+            self.watts_phase_a.value = meter.watts_phase_a.value
+            self.watts_phase_b.value = meter.watts_phase_b.value
+            self.watts_phase_c.value = meter.watts_phase_c.value
                 # Acrel AGF-AE-D reg 40022. If 0, coeff=1. If 1, coeff=10.
-            self.real_power_scale_factor         .value = meter.real_power_scale_factor       .value
+            self.real_power_scale_factor.value = meter.real_power_scale_factor.value
 
         except TypeError:   # if one of the registers was None because it wasn't read yet
             log.warning( "FakeSmartmeter cannot reply to client: real smartmeter missing fields" )
@@ -238,10 +242,12 @@ class FakeMeter1( grugbus.LocalServer ):
 ########################################################################################
 class GridMeter( grugbus.SlaveDevice ):
     def __init__( self ):
+        self.port = config.RGM_PORT_METER
+        self.modbus_id = 2
         log.info("Initializing GridMeter...")
         super().__init__( 
             AsyncModbusSerialClient(
-                port            = config.RGM_PORT_METER,
+                port            = self.port,
                 timeout         = 0.3,
                 retries         = config.MODBUS_RETRIES_SOLIS,
                 baudrate        = 9600,
@@ -249,11 +255,11 @@ class GridMeter( grugbus.SlaveDevice ):
                 parity          = "N",
                 stopbits        = 1
             ),
-            2,          # Modbus address
+            self.modbus_id,          # Modbus address
             "meter", "Acrel_AGFAED", 
             Acrel_AGF_AE_D.MakeRegisters() )
         self.is_online = False
-        log.info("GridMeter initialized")
+        log.info("GridMeter initialized on port %s with Modbus ID %d", self.port, self.modbus_id)
 
     async def read_coroutine( self ):
         log.info("Starting GridMeter read coroutine...")
@@ -275,6 +281,7 @@ class GridMeter( grugbus.SlaveDevice ):
 
                 try:
                     regs = await self.read_regs( regs_to_read )
+                    log.info("Data read from GridMeters: %s", regs)
                     if not self.is_online:
                         log.info("GridMeter is now online")
                     self.is_online = True
@@ -381,5 +388,6 @@ class DeltaManager():
 if __name__ == "__main__":
     log.info("Starting main program")
     mgr = DeltaManager()
+    log.info("mgr.start")
     mgr.start()
     log.info("Program ended")

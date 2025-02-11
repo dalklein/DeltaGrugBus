@@ -118,7 +118,7 @@ ENABLE_SYSINFO  = True      # Post CPU usage to MQTT
 #  Originally, Delta ExTLUS RevenueGradeMeter RGM rs485 port 
 # connects inverter(client) to meter & battery (servers)
 #    Now, the meter is connected via GrugBus MITM to the inverter.
-RGM_PORT_METER       = "/dev/ttyACM1"   # Acrel AGF-AE-D 'grid' meter
+RGM_PORT_METER       = "/dev/ttyACM1"   # connection to Acrel AGF-AE-D 'grid' meter
 RGM_PORT_FAKE_METER1 = "/dev/ttyACM0"   # fake 'grid' meter connected to Delta inverter 1
 
 ##################################################################
