@@ -260,31 +260,34 @@ class GridMeter( grugbus.SlaveDevice ):
             Acrel_AGF_AE_D.MakeRegisters() )
         self.is_online = False
         log.info("GridMeter initialized on port %s with Modbus ID %d", self.port, self.modbus_id)
+        self.tick = Metronome(config.POLL_PERIOD_METER)
 
     async def read_coroutine( self ):
         log.info("Starting GridMeter read coroutine...")
         regs_to_read = (
-            self.total_real_power         ,    
-            self.watts_phase_a            ,  
-            self.watts_phase_b            ,   
-            self.watts_phase_c            ,   
+            self.total_real_power,    
+            self.watts_phase_a,  
+            self.watts_phase_b,   
+            self.watts_phase_c,   
             self.real_power_scale_factor         
         )
 
-        tick = Metronome(config.POLL_PERIOD_METER)
+        log.info("Polling GridMeter at %.2f sec rate", config.POLL_PERIOD_METER)
         while STILL_ALIVE:
             try:
                 if not self.modbus.connected:
-                    log.info("Attempting modbus connection...")
+                    log.info("Attempting GridMeter modbus connection...")
                     await self.modbus.connect()
-                    log.info("Modbus connected successfully")
+                    log.info("Modbus GridMeter connected successfully")
 
                 try:
-                    regs = await self.read_regs( regs_to_read )
-                    log.info("Data read from GridMeters: %s", regs)
+                    log.info("Reading data from GridMeter...")
+                    regs = await self.read_regs(regs_to_read)
+                    log.info("Data read from GridMeter: %s", regs)
                     if not self.is_online:
                         log.info("GridMeter is now online")
                     self.is_online = True
+
                 except asyncio.exceptions.TimeoutError:
                     if self.is_online:
                         log.warning("GridMeter went offline - timeout")
@@ -302,7 +305,12 @@ class GridMeter( grugbus.SlaveDevice ):
                 s = traceback.format_exc()
                 log.error(s)
                 await asyncio.sleep(0.5)
-            await tick.wait()
+
+            # wake up other coroutines waiting for fresh values
+            self.event_all.set()
+            self.event_all.clear()
+            # reload config if changed
+            self.tick.set(config.POLL_PERIOD_METER)
 
 ########################################################################################
 #

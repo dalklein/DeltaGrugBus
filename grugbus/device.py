@@ -265,7 +265,7 @@ class SlaveDevice( DeviceBase ):
             # mutex_time = 0
             update_list = []
             for fcode, chunk in self.reg_list_to_chunks( read_list, max_hole_size ):
-                # print( fcode, ":", " ".join( "%d-%d" % (c[0],c[1]) for c in chunk ))
+                print( fcode, ":", " ".join( "%d-%d" % (c[0],c[1]) for c in chunk ))
                 func = self._read_funcs.get( fcode )
                 if not func: 
                     raise ValueError( "Function code %s not supported for read_regs()" % fcode )
@@ -273,14 +273,19 @@ class SlaveDevice( DeviceBase ):
                 # modbus bulk read
                 start_addr  = chunk[0][0]
                 end_addr    = chunk[-1][1]
+                print( start_addr, end_addr, self.bus_address )
                 for retry in range( retries ):
+                    print("read regs checking connection")
                     await self.connect()
+                    print("connected / ok")
                     try:
                         # mutex_time -= time.monotonic()
                         # async with self.modbus._async_mutex:    # share same serial port between several tasks
                         # st = time.monotonic()
                         # mutex_time += st
+                        print("read_regs", start_addr, end_addr-start_addr, self.bus_address) 
                         resp = await func( start_addr, end_addr-start_addr, self.bus_address )
+                        print("resp.registers", resp.registers )
                         # modbus_time += time.monotonic() - st
                         if isinstance( resp, ExceptionResponse ):
                             raise ModbusException( str( resp ) )
@@ -288,6 +293,7 @@ class SlaveDevice( DeviceBase ):
                             reg_data = resp.registers
                         else:
                             reg_data = resp.bits
+                        print("reg_data", reg_data )    
                         # if self.modbus._async_mutex._waiters:
                             # wait until serial is flushed before releasing lock, 
                             # do not use asyncio sleep, we're in a hurry to release it

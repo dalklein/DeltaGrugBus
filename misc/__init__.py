@@ -3,6 +3,13 @@
 
 import time, asyncio, math, collections
 
+class Metronome_tiny:
+    def __init__(self, interval):
+        self.interval = interval
+
+    async def wait(self):
+        await asyncio.sleep(self.interval)
+
 class Metronome:
     """
         Simple class to periodically trigger an event.
